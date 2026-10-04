@@ -1,10 +1,29 @@
 const crypto = require('node:crypto');
 
-const { BRIDGE_PROTOCOL_VERSION, WS_OPCODE } = require('./constants');
+const { BRIDGE_PROTOCOL_VERSION, MAX_WS_FRAME_BYTES, WS_OPCODE } = require('./constants');
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+const FRAME_TOO_LARGE_ERROR = 'WS_FRAME_TOO_LARGE';
+const WS_PROTOCOL_ERROR = 'WS_PROTOCOL_ERROR';
+const WS_CLOSE_NORMAL = 1000;
 
-function jsonMessage(type, payload, requestId = null) {
+import type { BridgeClient } from './types';
+
+function frameTooLarge() {
+    const error = new RangeError(
+        `WebSocket frames are limited to ${MAX_WS_FRAME_BYTES} bytes.`,
+    ) as RangeError & { code: string };
+    error.code = FRAME_TOO_LARGE_ERROR;
+    return error;
+}
+
+function protocolError(message: string) {
+    const error = new Error(message) as Error & { code: string };
+    error.code = WS_PROTOCOL_ERROR;
+    return error;
+}
+
+function jsonMessage(type: string, payload: unknown, requestId: string | number | null = null) {
     return JSON.stringify({
         type,
         version: BRIDGE_PROTOCOL_VERSION,
@@ -13,7 +32,7 @@ function jsonMessage(type, payload, requestId = null) {
     });
 }
 
-function makeFrame(opcode, payload) {
+function makeFrame(opcode: number, payload: Buffer | string) {
     const source = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
     const header: number[] = [];
     header.push(0x80 | (opcode & 0x0f));
@@ -24,7 +43,12 @@ function makeFrame(opcode, payload) {
     }
 
     if (source.length < 65536) {
-        const prefix = Buffer.from([header[0], 126, (source.length >> 8) & 0xff, source.length & 0xff]);
+        const prefix = Buffer.from([
+            header[0],
+            126,
+            (source.length >> 8) & 0xff,
+            source.length & 0xff,
+        ]);
         return Buffer.concat([prefix, source]);
     }
 
@@ -36,17 +60,22 @@ function makeFrame(opcode, payload) {
     return Buffer.concat([prefix, source]);
 }
 
-function sendText(client, text) {
+function sendText(client: BridgeClient, text: string) {
     if (!client.closed) {
         client.socket.write(makeFrame(WS_OPCODE.TEXT, Buffer.from(text, 'utf8')));
     }
 }
 
-function sendJson(client, type, payload, requestId = null) {
+function sendJson(
+    client: BridgeClient,
+    type: string,
+    payload: unknown,
+    requestId: string | number | null = null,
+) {
     sendText(client, jsonMessage(type, payload, requestId));
 }
 
-function closeClient(client, code = 1000, reason = 'Closing') {
+function closeClient(client: BridgeClient, code = WS_CLOSE_NORMAL, reason = 'Closing') {
     if (client.closed) {
         return;
     }
@@ -60,7 +89,7 @@ function closeClient(client, code = 1000, reason = 'Closing') {
     client.socket.end();
 }
 
-function parseFrame(buffer) {
+function parseFrame(buffer: Buffer) {
     if (buffer.length < 2) {
         return null;
     }
@@ -88,11 +117,15 @@ function parseFrame(buffer) {
         const high = buffer.readUInt32BE(offset);
         const low = buffer.readUInt32BE(offset + 4);
         if (high !== 0) {
-            throw new Error('Large websocket frames are not supported.');
+            throw frameTooLarge();
         }
 
         length = low;
         offset += 8;
+    }
+
+    if (length > MAX_WS_FRAME_BYTES) {
+        throw frameTooLarge();
     }
 
     let mask = null;
@@ -103,6 +136,17 @@ function parseFrame(buffer) {
 
         mask = buffer.subarray(offset, offset + 4);
         offset += 4;
+    } else {
+        throw protocolError('Client frames must be masked');
+    }
+
+    if (opcode >= 8) {
+        if (!fin) {
+            throw protocolError('Control frames must not be fragmented');
+        }
+        if (length > 125) {
+            throw protocolError('Control frames must have a payload of 125 bytes or less');
+        }
     }
 
     if (buffer.length < offset + length) {
@@ -124,13 +168,18 @@ function parseFrame(buffer) {
     };
 }
 
-function createAcceptKey(key) {
-    return crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
+function createAcceptKey(key: string) {
+    return crypto
+        .createHash('sha1')
+        .update(key + WS_GUID)
+        .digest('base64');
 }
 
 module.exports = {
     closeClient,
     createAcceptKey,
+    FRAME_TOO_LARGE_ERROR,
+    WS_PROTOCOL_ERROR,
     jsonMessage,
     makeFrame,
     parseFrame,

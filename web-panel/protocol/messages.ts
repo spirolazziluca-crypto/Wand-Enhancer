@@ -1,4 +1,4 @@
-export { PROTOCOL_VERSION } from './contract';
+export { PROTOCOL_VERSION } from './contract.js';
 
 // String values mirror the wire protocol; do not rename the right-hand side.
 export enum ECheatType {
@@ -49,8 +49,6 @@ export interface InstalledAppSummary {
     displayName: string;
     gameId?: string | null;
     titleId?: string | null;
-    location: string;
-    alternateLocations: string[];
     imageUrl?: string | null;
     platformLastPlayedTimestamp?: number | null;
     platformTotalPlaytimeMinutes?: number | null;
@@ -108,7 +106,6 @@ export interface TrainerSummary {
 export interface TrainerMetaPayload {
     session: {
         instanceId: string;
-        accessToken?: string;
     };
     trainer: TrainerSummary;
     schema: {
@@ -193,7 +190,6 @@ export type HelloMessage = MessageEnvelope<
     {
         client: 'mobile-web';
         clientVersion: string;
-        pairingToken?: string;
         capabilities: {
             supportsDeltaValues: boolean;
             supportsTrainerSwitch: boolean;
@@ -220,7 +216,10 @@ export type TrainerChangedMessage = MessageEnvelope<'trainer_changed', TrainerCh
 export type SetValueMessage = MessageEnvelope<'set_value', SetValuePayload>;
 export type SetValueResultMessage = MessageEnvelope<'set_value_result', SetValueResultPayload>;
 export type RemoteCommandMessage = MessageEnvelope<'remote_command', RemoteCommandPayload>;
-export type RemoteCommandResultMessage = MessageEnvelope<'remote_command_result', RemoteCommandResultPayload>;
+export type RemoteCommandResultMessage = MessageEnvelope<
+    'remote_command_result',
+    RemoteCommandResultPayload
+>;
 export type ErrorMessage = MessageEnvelope<'error', ErrorPayload>;
 
 export type IncomingMessage =
@@ -236,4 +235,3 @@ export type IncomingMessage =
     | ErrorMessage;
 
 export type OutgoingMessage = HelloMessage | SetValueMessage | RemoteCommandMessage;
-

@@ -1,12 +1,15 @@
 import { formatHumanLabel } from '@/shared/lib/ui';
-import type { GameStatusPayload, InstalledAppSummary, TrainerSummary } from '../../../protocol/messages';
+import type {
+    GameStatusPayload,
+    InstalledAppSummary,
+    TrainerSummary,
+} from '../../../protocol/messages';
 
 export type LibraryGame = {
     id: string;
     title: string;
     platform: string;
     hours: number | null;
-    path: string;
     imageUrl: string | null;
     app: InstalledAppSummary;
     gameId: string | null;
@@ -27,25 +30,28 @@ export function buildLibraryGames(
     trainer: TrainerSummary | null,
     pinnedGameIds: Record<string, true>,
 ): LibraryGame[] {
-    const activeGameId = status?.session.gameId ?? status?.trainer.gameId ?? trainer?.gameId ?? null;
-    const activeTitleId = status?.session.titleId ?? status?.trainer.titleId ?? trainer?.titleId ?? null;
+    const activeGameId =
+        status?.session.gameId ?? status?.trainer.gameId ?? trainer?.gameId ?? null;
+    const activeTitleId =
+        status?.session.titleId ?? status?.trainer.titleId ?? trainer?.titleId ?? null;
 
-    return apps.map((app) => {
-        const id = getInstalledAppId(app);
-        return {
-            id,
-            title: app.displayName,
-            platform: formatHumanLabel(app.platform),
-            hours: minutesToHours(app.platformTotalPlaytimeMinutes),
-            path: app.location,
-            imageUrl: app.imageUrl ?? null,
-            app,
-            gameId: app.gameId ?? null,
-            titleId: app.titleId ?? null,
-            pinned: Boolean(pinnedGameIds[id]),
-            running: isActiveInstalledApp(app, activeGameId, activeTitleId),
-        };
-    }).sort(compareLibraryGames);
+    return apps
+        .map((app) => {
+            const id = getInstalledAppId(app);
+            return {
+                id,
+                title: app.displayName,
+                platform: formatHumanLabel(app.platform),
+                hours: minutesToHours(app.platformTotalPlaytimeMinutes),
+                imageUrl: app.imageUrl ?? null,
+                app,
+                gameId: app.gameId ?? null,
+                titleId: app.titleId ?? null,
+                pinned: Boolean(pinnedGameIds[id]),
+                running: isActiveInstalledApp(app, activeGameId, activeTitleId),
+            };
+        })
+        .sort(compareLibraryGames);
 }
 
 export function getCurrentGame(games: LibraryGame[]): LibraryGame | null {
@@ -71,7 +77,6 @@ export function filterLibraryGames(games: LibraryGame[], query: string): Library
         if (game.title.toLowerCase().includes(normalized)) return true;
         if (game.id.toLowerCase().includes(normalized)) return true;
         if (game.platform.toLowerCase().includes(normalized)) return true;
-        if (game.path.toLowerCase().includes(normalized)) return true;
         return false;
     });
 }
@@ -86,19 +91,6 @@ export function formatHours(hours: number | null): string | null {
     }
 
     return `${Math.round(hours)}h`;
-}
-
-export function shortPath(path: string): string {
-    if (!path.trim()) {
-        return '';
-    }
-
-    const parts = path.split(/[\\/]/).filter(Boolean);
-    if (parts.length <= 2) {
-        return path;
-    }
-
-    return `.../${parts.slice(-2).join('/')}`;
 }
 
 export function getGameCoverLabel(game: LibraryGame): string {
@@ -131,7 +123,11 @@ function compareLibraryGames(left: LibraryGame, right: LibraryGame): number {
     return left.title.localeCompare(right.title);
 }
 
-function isActiveInstalledApp(app: InstalledAppSummary, activeGameId: string | null, activeTitleId: string | null): boolean {
+function isActiveInstalledApp(
+    app: InstalledAppSummary,
+    activeGameId: string | null,
+    activeTitleId: string | null,
+): boolean {
     if (activeGameId && app.gameId === activeGameId) {
         return true;
     }
